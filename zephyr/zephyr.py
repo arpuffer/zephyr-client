@@ -1,7 +1,12 @@
+from typing import (List,
+                    Optional,
+                    Tuple,
+                    Union,
+                    NamedTuple)
 from requests import Request, Session
-from typing import List, Tuple, Union, NamedTuple
 import jira
-from .config import (SERVER,
+
+from config import (SERVER,
                     USER,
                     PASSWORD,
                     VERIFY,
@@ -11,17 +16,41 @@ ZAPI_URL = SERVER + '/rest/zapi/latest/'
 CYCLES_URL = ZAPI_URL + 'cycle/?projectId={}&versionId={}'
 EXECUTIONS_URL = ZAPI_URL + 'execution/?projectId={}&versionId={}&cycleId={}&folderId={}'
 
-class Resource(NamedTuple):
-    name: str
-    id: int
-    description: str
-    url: str
+class Resource():
+    def __init__(self,
+                 name: Union[str, int],
+                 id: int,
+                 description: str,
+                 url: str,
+                 parent = None,
+                 children = []):
+        self.name = name
+        self.id = id
+        self.description = description
+        self.url = url
+        self.parent = parent
+        self._children = children
+
+class ExecutionResource(Resource):
+    def __init__(self, parent_folder: Resource):
+        super().__init__(parent_folder)
+        pass
+
+    def assign(self, user: str):
+        pass
+
+    def move(self, folder: Resource):
+        pass
+
+    def update(self, status=None, comment=None):
+        pass
+
 
 class Zephyr():
     def __init__(self,
                  server = SERVER,
                  basic_auth = None,
-                 headers = None,
+                 headers = HEADERS,
                  verify: bool = VERIFY,
                  timeout: int = TIMEOUT):
         self.server: str = server
@@ -33,14 +62,15 @@ class Zephyr():
             self._session.auth = (USER, PASSWORD)
         self.timeout = timeout
         self._session.verify = verify
-        self._projects: list = []
+        self._projects: list = []  # Lazy loaded list
 
+    @property
     def projects(self) -> List[Resource]:
         if not self._projects:
             jira_session = jira.JIRA(server=self.server, auth=self._session.auth, timeout=20)
             projects = jira_session.projects()
             projects = [Resource(x.key, x.id, x.name, x.self) for x in projects]
-            self._projects = projects()
+            self._projects = projects
             jira_session.close()
         return self._projects
 
@@ -61,7 +91,7 @@ class Zephyr():
             dict: json response  # TODO: Return List[Resource]
         """
         if isinstance(project, str):
-            project_id, = [x.id for x in self.projects() if x.name == project]  # Trailing comma raises ValueError if len(list) > 1, and we only expect one match 
+            project_id, = [x.id for x in self.projects if x.name == project]  # Trailing comma raises ValueError if len(list) > 1, and we only expect one match 
         elif isinstance(project, Resource):
             project_id = project.id
         elif isinstance(project, int):
@@ -95,14 +125,4 @@ class Zephyr():
                    cycle,
                    folder,
                    zql=None) -> List[Resource]:
-        pass
-
-    def update_execution(self,
-                         execution: Resource,
-                         status: int,
-                         comment: str):
-        pass
-
-    def move_execution(self,
-                       execution: Resource):
         pass

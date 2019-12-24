@@ -5,46 +5,57 @@ from typing import (List,
                     NamedTuple)
 from requests import Request, Session
 import jira
-
 from config import (SERVER,
                     USER,
                     PASSWORD,
                     VERIFY,
                     TIMEOUT)
+
 HEADERS = {"Content-Type": "application/json"}
 ZAPI_URL = SERVER + '/rest/zapi/latest/'
 CYCLES_URL = ZAPI_URL + 'cycle/?projectId={}&versionId={}'
 EXECUTIONS_URL = ZAPI_URL + 'execution/?projectId={}&versionId={}&cycleId={}&folderId={}'
+FOLDERS_URL = ZAPI_URL + 'cycle/{}/folders?projectId={}&versionId={}&limit=&offset='
+EXECUTIONS_URL = ZAPI_URL + 'execution?projectId={}&versionId={}&cycleId={}&folderId={}'
+EXECUTIONS_ZQL_URL = ZAPI_URL + 'zql/executeSearch?zqlQuery={}'
 
 class Resource():
     def __init__(self,
                  name: Union[str, int],
                  id: int,
-                 description: str,
                  url: str,
                  parent = None,
-                 children = []):
+                 session = None,
+                 raw = None):
         self.name = name
         self.id = id
-        self.description = description
         self.url = url
         self.parent = parent
-        self._children = children
+        self._session = session
+        self._raw = None
 
-class ExecutionResource(Resource):
-    def __init__(self, parent_folder: Resource):
-        super().__init__(parent_folder)
-        pass
+class Execution(Resource):
+    def __init__(self):
+        super().__init__()
+        self._steps = {}
+        raise NotImplementedError
+
+    @property
+    def steps(self):
+        raise NotImplementedError
 
     def assign(self, user: str):
-        pass
+        raise NotImplementedError
 
     def move(self, folder: Resource):
-        pass
+        raise NotImplementedError
 
     def update(self, status=None, comment=None):
-        pass
+        raise NotImplementedError
 
+class Version(Resource):
+    def __init__(self):
+        raise NotImplementedError
 
 class Zephyr():
     def __init__(self,
@@ -67,12 +78,22 @@ class Zephyr():
     @property
     def projects(self) -> List[Resource]:
         if not self._projects:
+            self._load_projects()
+        return self._projects
+    
+    def _load_projects(self):
             jira_session = jira.JIRA(server=self.server, auth=self._session.auth, timeout=20)
             projects = jira_session.projects()
-            projects = [Resource(x.key, x.id, x.name, x.self) for x in projects]
+            projects = [Resource(name=x.key,
+                                 id=x.id,
+                                 url=x.self,
+                                 session=self._session) for x in projects]
             self._projects = projects
             jira_session.close()
-        return self._projects
+
+    def project(self, name):
+        proj, = [x for x in self.projects if x.name == name]
+        return proj
 
     def cycles(self,
                project: Union[int, str, Resource],
@@ -117,12 +138,45 @@ class Zephyr():
                 project: Union[int, Resource],
                 version: Union[int, Resource],
                 cycle: Union[int, Resource]) -> List[Resource]:
-        pass
+        if isinstance(project, int):
+            project_id = str(project)
+        elif isinstance(project, Resource):
+            project_id = project.id
+        if isinstance(version, int):
+            version_id = str(version)
+        elif isinstance(version, Resource):
+            version_id = version.id
+        if isinstance(cycle, int):
+            cycle_id = str(cycle)
+        elif isinstance(cycle, Resource):
+            cycle_id = cycle.id
+        url = FOLDERS_URL.format(cycle_id, project_id, version_id)
+        response = self._session.get(url, timeout=self.timeout)
+        return response.json()
 
     def executions(self,
                    project,
                    version,
                    cycle,
-                   folder,
-                   zql=None) -> List[Resource]:
-        pass
+                   folder) -> List[Resource]:
+        url = EXECUTIONS_URL.format(project, version, cycle, folder)
+        response = self._session.get(url, timeout=self.timeout)
+        return response.json()
+
+    def executions_zql(self, query: str):
+        url = EXECUTIONS_ZQL_URL.format(query)
+        response = self._session.get(url, timeout=self.timmeout)
+        return response.json()
+        
+    def _execution(self, *args):
+        raise NotImplementedError
+
+    def _folder(self, *args):
+        raise NotImplementedError
+
+    def _cycle(self, *args):
+        raise NotImplementedError
+
+def test():
+    session = Zephyr()
+    projects = session.projects()

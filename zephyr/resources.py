@@ -11,45 +11,46 @@ PROJECT_URL = JIRA_URL + 'project'
 EXECUTION_URL = ZAPI_URL + 'execution'
 GETEXECUTIONS_URL = EXECUTION_URL + '?projectId={}&versionId={}&folderId={}&cycleId={}'
 CYCLE_URL = ZAPI_URL + 'cycle'
-GETCYCLES_URL = CYCLE_URL + '?projectId={}&versionId={}'  # unsure why ampersand not required after '?' here
+GETCYCLES_URL = CYCLE_URL + '?projectId={}&versionId={}'
 FOLDERS_URL = ZAPI_URL + 'cycle/{}/folders?projectId={}&versionId={}&limit=&offset='
 STEPS_URL = ZAPI_URL + 'stepResult?executionId={}'
 
 
 class Resource():
+    """Base class for Jira/Zephyr Resources"""
     def __init__(self,
                  name: str,
-                 id: int,
-                 session = None):
+                 id_: int,
+                 session=None):
         self.name = name
-        self.id = id
+        self.id_ = id_
         self._session: Session = session
-        self.url = None
-        self._raw = None
-    
-    @property
-    def raw(self):
-        if not self._raw:
-            self._load()
-        return self._raw
-
-    def _load(self):
-        self._raw = self._session.get(self.url, timeout=self._session.timeout)
 
 class Project(Resource):
+    """Jira Project Resource.  This is the top-level resource.
+    Use the jira library for advanced operations
+    """
     # TODO: Pull in from the jira lib(?)
-    def __init__(self, name, id, session):
-        super().__init__(name, id, session)
-        self.url = PROJECT_URL + '/{}'.format(id)
+    def __init__(self, name, id_, session):
+        super().__init__(name, id_, session)
+        self.url = PROJECT_URL + '/{}'.format(id_)
         self._versions = None
 
     @property
     def versions(self):
-        if self._versions == None:
+        if self._versions is None:
             self._load_versions()
         return self._versions
 
     def version(self, version_name):
+        """Find version (also known as fixVersion) by name
+
+        Args:
+            version_name (str)
+
+        Returns:
+            Version
+        """
         version, = [x for x in self.versions if x.name == version_name]
         return version
 
@@ -57,81 +58,84 @@ class Project(Resource):
         response = self._session.get(self.url, timeout=self._session.timeout)
         response = response.json()
         raw_versions = response['versions']
-        versions = [Version(name = x['name'],
-                            id = x['id'],
-                            project = self.id,
-                            session = self._session) for x in raw_versions]
+        versions = [Version(name=x['name'],
+                            id_=x['id'],
+                            project=self.id_,
+                            session=self._session) for x in raw_versions]
         self._versions = versions
 
 class Test(Resource):
+    """ Zephyr Test Resource """
     def __init__(self):
         raise NotImplementedError
 
 class Version(Resource):
-    # Child of Project
-    # TODO: Pull in from the jira lib(?)
-    def __init__(self, name, id, session, project):
-        super().__init__(name, id, session)
+    """ Jira Version (fixVersion) resource.  For more advanced tools,
+    use the jira library.  Child of Project resource.
+    TODO: Pull in from the jira lib(?)
+    """
+    def __init__(self, name, id_, session, project):
+        super().__init__(name, id_, session)
         self.project = project
         self._cycles = None
 
     @property
     def cycles(self):
-        if self._cycles == None:
+        if self._cycles is None:
             self._load_cycles()
         return self._cycles
 
     def _load_cycles(self):
         cycles = []
-        url = GETCYCLES_URL.format(self.project, self.id)
+        url = GETCYCLES_URL.format(self.project, self.id_)
         response = self._session.get(url, timeout=self._session.timeout)
         cycles_dict = response.json()  # dict in this casee
         cycles_dict.pop('recordsCount')
-        for k,v in cycles_dict.items():
+        for k, v in cycles_dict.items():
             cycle = Cycle(name=v['name'],
-                          id=k,
+                          id_=k,
                           session=self._session,
-                          version = self.id,
-                          project = self.project)
+                          version=self.id_,
+                          project=self.project)
             cycles.append(cycle)
         self._cycles = cycles
 
 class Cycle(Resource):
-    # Child of Version (aka fixVersion)
-    def __init__(self, name, id, session, version, project):
-        super().__init__(name, id, session)
+    """ Zephyr Test Cycle resource, child of Version (fixVersion) """
+    def __init__(self, name, id_, session, version, project):
+        super().__init__(name, id_, session)
         self.project = project
         self.version = version
-        self.url = CYCLE_URL + '/{}/'.format(id)
+        self.url = CYCLE_URL + '/{}/'.format(id_)
         self._folders = None
 
     @property
     def folders(self):
-        if self._folders == None:
+        if self._folders is None:
             self._load_folders()
         return self._folders
 
     def _load_folders(self):
         url = self.url + 'folders?'
         params = {'projectId': self.project,
-                    'versionId': self.version}
+                  'versionId': self.version}
         folders = self._session.get(url, params=params, timeout=self._session.timeout)
-        folders = folders.json()  # returns a list in this case -- there is not much consistency in Zephyr
+        folders = folders.json()  # returns a list in this case -- not much consistency in Zephyr
         self._folders = [Folder(name=x['folderName'],
-                                id=x['folderId'],
+                                id_=x['folderId'],
                                 project=self.project,
                                 version=self.version,
-                                cycle=self.id,
+                                cycle=self.id_,
                                 session=self._session) for x in folders]
 
 class Folder(Resource):
-    """
+    """ Zephyr Folder resource
     Child of Cycle, NOT a resource entity.  Used only to query for executions.
     Execution querying requires a folder, and cannot be done from higher levels except via ZQL.
     All that exists for folder is a name and an ID integer
     """
-    def __init__(self, name, id, project, version, cycle, session):
-        super().__init__(name, id, session)
+    def __init__(self, name, id_, project, version, cycle, session):
+        super().__init__(name, id_, session)
         self.project = project
         self.version = version
         self.cycle = cycle
@@ -139,63 +143,75 @@ class Folder(Resource):
 
     @property
     def executions(self):
-        if self._executions == None:
+        if self._executions is None:
             self._load_executions()
         return self._executions
 
     def _load_executions(self):
-        url = GETEXECUTIONS_URL.format(self.project, self.version, self.id, self.cycle)
+        url = GETEXECUTIONS_URL.format(self.project, self.version, self.id_, self.cycle)
         executions = self._session.get(url, timeout=self._session.timeout)
         executions = executions.json()  # list in this case
         executions = executions['executions']
-        self._executions = [Execution(id=x['id'],
+        self._executions = [Execution(id_=x['id'],
                                       session=self._session) for x in executions]
 
 class Execution(Resource):
-    def __init__(self, id, session):
-        super().__init__(name=None, id=id, session=session)
-        self.url = EXECUTION_URL + '/{}'.format(id)
+    """ Zephyr Test Execution resource.  This resource is a distinct execution of a test
+    for a given Folder
+    """
+    def __init__(self, id_, session):
+        super().__init__(name=None, id_=id_, session=session)
+        self.url = EXECUTION_URL + '/{}'.format(id_)
         self._raw = None
         self._steps = None
 
     @property
     def raw(self):
-        if self._raw == None:
+        if self._raw is None:
             self._load()
         return self._raw
 
     @property
     def steps(self):
-        if self._steps == None:
+        if self._steps is None:
             self._load_steps()
         return self._steps
-    
+
     def _load(self):
         raw = self._session.get(self.url, timeout=self._session.timeout)
         self._raw = raw.json()
 
     def _load_steps(self):
         # TODO: See links in slack from Aaron, latest changes in master
-        url = STEPS_URL.format(self.id)
+        url = STEPS_URL.format(self.id_)
         steps = self._session.get(url, timeout=self._session.timeout)
         steps = steps.json()  # list in this case
         self._steps = steps # maybe parse into an object later, maybe stop caring while I'm ahead
 
     def assign(self, user: str):
+        """Assign execution to user
+
+        Args:
+            user (str): id, not name (john.smith, not John Smith)
+
+        Raises:
+            HTTPError: on failure to assign
+        """
         url = self.url + '?assignee={}'.format(user)
         response = self._session.post(url, timeout=self._session.timeout)
         if response.code != 200:
-            raise HTTPError('Assign failed, code: %s', response.code)
-        logger.debug('Assigned execution %s to %s', self.id, user)
-
+            raise HTTPError('Assign failed, code: %s' % response.code)
+        logger.debug('Assigned execution %s to %s', self.id_, user)
 
     def move(self, folder: Resource):
         """ REFERENCE FROM OLD IMPLEMENTATION
         def move_executions(project, fixVersion, cycle, folder, executions):
             url = "https://jira.MYSERVER.net/rest/zapi/latest/cycle/%s/move/executions/folder/%s"
-            url = url % (cycle.id, folder.id)
-            execution_ids = [x.id for x in executions]
-            payload = '{"projectId": %s, "versionId": %s, "schedulesList": %s}' % (project.id, fixVersion.id, execution_ids)
+            url = url % (cycle.id_, folder.id_)
+            execution_ids = [x.id_ for x in executions]
+            payload = '{"projectId": %s, "versionId": %s, "schedulesList": %s}' % (project.id_,
+                                                                                   fixVersion.id_,
+                                                                                   execution_ids)
             response = requests.request("PUT", url, data=payload, headers=headers, auth=(user, passwd))
             if js_res.status_code != 200:
                 print(js_res)

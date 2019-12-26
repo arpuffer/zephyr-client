@@ -1,15 +1,12 @@
-from typing import (List,
-                    Optional,
-                    Tuple,
-                    Union,
-                    NamedTuple)
-from requests import Request, Session
+''' ZEPHYR for JIRA Client
+    A python client for the Zephyr for Jira plugin from SmartBear.
+    Official API documentation is NOT reliable, but can be found here:
+    https://getzephyr.docs.apiary.io
+'''
+from typing import List
+from requests import Session
 import jira
-from resources import (Project,
-                       Version,
-                       Cycle,
-                       Folder,
-                       Execution)
+from resources import Project
 from config import (SERVER,
                     USER,
                     PASSWORD,
@@ -26,10 +23,12 @@ EXECUTIONS_ZQL_URL = ZAPI_URL + 'zql/executeSearch?zqlQuery={}'
 STEPS_URL = ZAPI_URL + 'stepResult?executionId={}'
 
 class Zephyr():
+    """Client session that leverages a requests.Session to interface with the Zephyr API
+    """
     def __init__(self,
-                 server = SERVER,
-                 basic_auth = None,
-                 headers = HEADERS,
+                 server=SERVER,
+                 basic_auth=None,
+                 headers=HEADERS,
                  verify: bool = VERIFY,
                  timeout: int = TIMEOUT):
         self.server: str = server
@@ -42,36 +41,49 @@ class Zephyr():
             self._session.auth = (USER, PASSWORD)
         self.timeout = timeout
         self._session.verify = verify
-        self._projects: list = []  # Lazy loaded list
+        self._projects = None  # assign None for uninitialized state
 
     @property
     def projects(self) -> List[Project]:
-        if not self._projects:
+        """Lazily loaded projects property
+
+        Returns:
+            List[Project]:
+        """
+        if self._projects is None:
             self._load_projects()
         return self._projects
-    
+
     def _load_projects(self):
-            jira_session = jira.JIRA(server=self.server, auth=self._session.auth, timeout=20)
-            projects = jira_session.projects()
-            projects = [Project(name=x.key,
-                                 id=x.id,
-                                 session=self._session) for x in projects]
-            self._projects = projects
-            jira_session.close()
+        jira_session = jira.JIRA(server=self.server, auth=self._session.auth, timeout=20)
+        projects = jira_session.projects()
+        projects = [Project(name=x.key,
+                            id_=x.id,
+                            session=self._session) for x in projects]
+        self._projects = projects
+        jira_session.close()
 
     def project(self, name):
+        """Find project by name (also known as key), not by integer id
+
+        Args:
+            name (str)
+
+        Returns:
+            Project
+        """
         proj, = [x for x in self.projects if x.name == name]
         return proj
 
     def executions_zql(self, query: str):
+        """Search for executions using ZQL
+
+        Args:
+            query (str): ZQL query
+
+        Returns:
+            List[Execution]
+        """
         url = EXECUTIONS_ZQL_URL.format(query)
         response = self._session.get(url, timeout=self._session.timeout)
         return response.json()
-
-    def test(self, key):
-        # TODO: Get jira issue, filter for test type
-        raise NotImplementedError
-
-def test():
-    session = Zephyr()
-    projects = session.projects

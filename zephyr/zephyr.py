@@ -18,7 +18,6 @@ JIRA_URL = SERVER + '/rest/api/2/'
 ZAPI_URL = SERVER + '/rest/zapi/latest/'
 
 EXECUTIONS_URL = ZAPI_URL + 'execution/?projectId={}&versionId={}&cycleId={}&folderId={}'
-EXECUTIONS_URL = ZAPI_URL + 'execution?projectId={}&versionId={}&cycleId={}&folderId={}'
 EXECUTIONS_ZQL_URL = ZAPI_URL + 'zql/executeSearch?zqlQuery={}'
 STEPS_URL = ZAPI_URL + 'stepResult?executionId={}'
 
@@ -44,7 +43,7 @@ class Zephyr():
         self._projects = None  # assign None for uninitialized state
 
     @property
-    def projects(self) -> List[Project]:
+    def projects(self):
         """Lazily loaded projects property
 
         Returns:
@@ -87,3 +86,17 @@ class Zephyr():
         url = EXECUTIONS_ZQL_URL.format(query)
         response = self._session.get(url, timeout=self._session.timeout)
         return response.json()
+
+    def _test_spam_calls(self, calls=200):
+        failed_responses = []
+        project_id = 10204
+        version_id = 20418
+        cycle_id = 3447
+        folder_id = 330
+        url = EXECUTIONS_URL.format(project_id, version_id, cycle_id, folder_id)
+        for _ in range(calls):
+            response = self._session.get(EXECUTIONS_URL, timout=self._session.timeout)
+            if response.status_code != 200:
+                failed_responses.append(response.content)
+        if failed_responses:
+            print("Failed calls: %s" % len(failed_responses))

@@ -199,8 +199,8 @@ class Execution(Resource):
         """
         url = self.url + '?assignee={}'.format(user)
         response = self._session.post(url, timeout=self._session.timeout)
-        if response.code != 200:
-            raise HTTPError('Assign failed, code: %s' % response.code)
+        if response.status_code != 200:
+            raise HTTPError('Assign failed, code: %s' % response.status_code)
         logger.debug('Assigned execution %s to %s', self.id_, user)
 
     def move(self, folder: Resource):

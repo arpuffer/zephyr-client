@@ -205,26 +205,5 @@ class Execution(Resource):
             raise HTTPError('Assign failed, code: %s' % response.status_code)
         logger.debug('Assigned execution %s to %s', self.id_, user)
 
-    def move(self, folder: Folder):
-        """ REFERENCE FROM OLD IMPLEMENTATION
-        def move_executions(project, fixVersion, cycle, folder, executions):
-            url = "https://jira.MYSERVER.net/rest/zapi/latest/cycle/%s/move/executions/folder/%s"
-            url = url % (cycle.id_, folder.id_)
-            execution_ids = [x.id_ for x in executions]
-            payload = '{"projectId": %s, "versionId": %s, "schedulesList": %s}' % (project.id_,
-                                                                                   fixVersion.id_,
-                                                                                   execution_ids)
-            response = requests.request("PUT",
-                                        url,
-                                        data=payload,
-                                        headers=headers,
-                                        auth=(user, passwd))
-            if js_res.status_code != 200:
-                print(js_res)
-                raise Exception('### Error, bad server response %s ###' % js_res.status_code)
-            return executions
-        """
-        raise NotImplementedError
-
     def update(self, status=None, comment=None):
         raise NotImplementedError

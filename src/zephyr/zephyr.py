@@ -6,7 +6,9 @@
 from typing import List
 from requests import Session
 import jira
-from resources import Project
+from resources import (Project,
+                       Folder,
+                       Execution)
 from config import (SERVER,
                     USER,
                     PASSWORD,
@@ -19,6 +21,8 @@ EMPTY_CYCLES_REQUEST = ZAPI_URL + 'cycle?expand='
 
 EXECUTIONS_URL = ZAPI_URL + 'execution/?projectId={}&versionId={}&cycleId={}&folderId={}'
 EXECUTIONS_ZQL_URL = ZAPI_URL + 'zql/executeSearch?zqlQuery={}'
+MOVE_EXEUCTIONS_URL = ZAPI_URL + 'cycle/{}/move/executions/folder/{}'
+
 
 class Zephyr():
     """Client session that leverages a requests.Session to interface with the Zephyr API
@@ -93,6 +97,19 @@ class Zephyr():
 
     def get(self, url, params=None):
         return self._session.get(url=url, params=params, timeout=self.timeout)
+
+    def put(self, url, data):
+        return self._session.put(url=url, data=data, timeout=self.timeout)
+
+    def move_executions(self, executions: List[Execution], folder: Folder):
+        url = MOVE_EXEUCTIONS_URL.format(folder.cycle, folder.id_)
+        executions = [x.id for x in executions]
+        payload = {'projectId': folder.project,
+                   'versionId': folder.version,
+                   'schedulesList': executions}
+        response = self.put(url, data=payload)
+        if response.status_code != 200:
+            raise NotImplementedError
 
     def _check_connection(self):
         """Verify connection to ZAPI server (called on init)

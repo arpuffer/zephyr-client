@@ -205,7 +205,7 @@ class Execution(Resource):
             raise HTTPError('Assign failed, code: %s' % response.status_code)
         logger.debug('Assigned execution %s to %s', self.id_, user)
 
-    def move(self, folder: Resource):
+    def move(self, folder: Folder):
         """ REFERENCE FROM OLD IMPLEMENTATION
         def move_executions(project, fixVersion, cycle, folder, executions):
             url = "https://jira.MYSERVER.net/rest/zapi/latest/cycle/%s/move/executions/folder/%s"

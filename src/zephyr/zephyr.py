@@ -13,13 +13,12 @@ from config import (SERVER,
                     VERIFY,
                     TIMEOUT)
 
-HEADERS = {"Content-Type": "application/json"}
-JIRA_URL = SERVER + '/rest/api/2/'
-ZAPI_URL = SERVER + '/rest/zapi/latest/'
+_HEADERS = {"Content-Type": "application/json"}
+ZAPI_URL = '{}/rest/zapi/latest/'
+EMPTY_CYCLES_REQUEST = ZAPI_URL + 'cycle?expand='
 
 EXECUTIONS_URL = ZAPI_URL + 'execution/?projectId={}&versionId={}&cycleId={}&folderId={}'
 EXECUTIONS_ZQL_URL = ZAPI_URL + 'zql/executeSearch?zqlQuery={}'
-STEPS_URL = ZAPI_URL + 'stepResult?executionId={}'
 
 class Zephyr():
     """Client session that leverages a requests.Session to interface with the Zephyr API
@@ -27,20 +26,19 @@ class Zephyr():
     def __init__(self,
                  server=SERVER,
                  basic_auth=None,
-                 headers=HEADERS,
                  verify: bool = VERIFY,
                  timeout: int = TIMEOUT):
-        self.server: str = server
+        self.server: str = server  #TODO: this isn't actually read.  SERVER from configs is used for all the URLs.  Fix it quick.
+        self.timeout = timeout
         self._session = Session()
-        self._session.timeout = timeout
-        self._session.headers.update(headers)
+        self._session.headers.update(_HEADERS)
         if basic_auth:
             self._session.auth = basic_auth
         else:
             self._session.auth = (USER, PASSWORD)
-        self.timeout = timeout
         self._session.verify = verify
         self._projects = None  # assign None for uninitialized state
+        self._check_connection()
 
     @property
     def projects(self):
@@ -54,7 +52,13 @@ class Zephyr():
         return self._projects
 
     def _load_projects(self):
-        jira_session = jira.JIRA(server=self.server, auth=self._session.auth, timeout=20)
+        """Loads a list of projects using the jira library.  ZAPI responses are not suitable, as they do not
+        contain key names.  See documentation for project loading here: 
+        https://getzephyr.docs.apiary.io/#reference/utilresource/get-all-projects/get-all-projects
+        Response data example is NOT provided, but when calls were made to a real server, project name was not
+        present.
+        """
+        jira_session = jira.JIRA(server=self.server, auth=self._session.auth, timeout=self.timeout)
         projects = jira_session.projects()
         projects = [Project(name=x.key,
                             id_=x.id,
@@ -83,9 +87,28 @@ class Zephyr():
         Returns:
             List[Execution]
         """
-        url = EXECUTIONS_ZQL_URL.format(query)
-        response = self._session.get(url, timeout=self._session.timeout)
+        url = EXECUTIONS_ZQL_URL.format(self.server, query)
+        response = self.get(url=url)
         return response.json()
+
+    def get(self, url, params=None):
+        return self._session.get(url=url, params=params, timeout=self.timeout)
+
+    def _check_connection(self):
+        """Verify connection to ZAPI server (called on init)
+
+        Raises:
+            ValueError: If server responds, but authentication failed
+            ConnectionError: If no parseable response from server
+        """
+        url = self.server + EMPTY_CYCLES_REQUEST
+        response = self.get(url)
+        if not response:
+            if response.status_code == 401:
+                raise ValueError("Authentication failed!")
+            if response.status_code == 400:  # check for bad request code
+                return
+            raise ConnectionError("Status code: %s" % response.status_code)
 
     def _test_spam_calls(self, calls=200):
         failed_responses = []
@@ -93,9 +116,9 @@ class Zephyr():
         version_id = 20418
         cycle_id = 3447
         folder_id = 330
-        url = EXECUTIONS_URL.format(project_id, version_id, cycle_id, folder_id)
+        url = EXECUTIONS_URL.format(self.server, project_id, version_id, cycle_id, folder_id)
         for _ in range(calls):
-            response = self._session.get(EXECUTIONS_URL, timout=self._session.timeout)
+            response = self.get(url)
             if response.status_code != 200:
                 failed_responses.append(response.content)
         if failed_responses:

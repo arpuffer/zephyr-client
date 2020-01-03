@@ -2,7 +2,7 @@ import unittest
 from typing import Union
 from requests.exceptions import Timeout
 from ..src.zephyr import Zephyr
-from ..src.zephyr.resources import Project, Execution
+from ..src.zephyr.resources import Project, Execution, Folder
 
 INVALID_SERVER = 'invalid'
 VALID_SERVER = 'valid'
@@ -13,6 +13,8 @@ INVALID_PROJECT = 'invalid'
 POPULATED_ZQL = '' # TODO
 EMPTY_ZQL = ''  # TODO
 INVALID_ZQL = 'also wik' # TODO
+VALID_EXECUTION_ID = 0  # TODO
+EMPTY_FOLDER = Folder()
 
 class ZephyrTestCase(unittest.TestCase):
     def setUp(self):
@@ -64,6 +66,15 @@ class TestClient(ZephyrTestCase):
         self.assertIsInstance(query_result, list)
         with self.assertRaises(ValueError):
             self.zephyr_client.executions_zql(INVALID_ZQL)
+
+    def test_move_executions(self):
+        execution = Execution(VALID_EXECUTION_ID, self.zephyr_client)
+        orig_folder_id = execution.folder_id
+        dest_folder = EMPTY_FOLDER
+        self.assertNotEqual(orig_folder_id, dest_folder.id_)
+        self.assertNotEqual(dest_folder.id_, execution.folder_id)
+        self.zephyr_client.move_executions(executions=[execution], destination_folder=dest_folder)
+        self.assertEqual(dest_folder.id_, execution.folder_id)
 
     def test_get(self):
         """Given a Zephyr.get() call, url and params are passed

@@ -1,7 +1,7 @@
 ''' Zephyr Client Resource objects and accompanying methods '''
 import logging
 from requests import Session, HTTPError
-from config import SERVER
+from .config import SERVER
 
 logger = logging.getLogger(__name__)
 

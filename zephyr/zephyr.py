@@ -6,10 +6,10 @@
 from typing import List
 from requests import Session
 import jira
-from resources import (Project,
+from .resources import (Project,
                        Folder,
                        Execution)
-from config import (SERVER,
+from .config import (SERVER,
                     USER,
                     PASSWORD,
                     VERIFY,
@@ -96,12 +96,14 @@ class Zephyr():
         response = self.get(url=url)
         return response.json()
 
-    def get(self, url, params=None):
+    def get(self, url, params=None, raise_for_error=True):
         response = self._session.get(url=url, params=params, timeout=self.timeout)
-        jira.resilientsession.raise_on_error(response)
-        error = response.json().get(ERROR_DESC)
-        if error:
-            raise jira.JIRAError
+        if raise_for_error:
+            jira.resilientsession.raise_on_error(response)
+            content_error = response.json().get(ERROR_DESC)
+            if content_error:
+                raise jira.JIRAError(content_error)
+        return response
 
     def put(self, url, data):
         return self._session.put(url=url, data=data, timeout=self.timeout)
@@ -124,7 +126,9 @@ class Zephyr():
             ConnectionError: If no parseable response from server
         """
         url = EMPTY_CYCLES_REQUEST.format(self.server)
-        response = self.get(url)
+        response = self.get(url, raise_for_error=False)
+        if response.status_code == 400:  # If authorization is successful and server responds, this request should yield a 400
+            return
         jira.resilientsession.raise_on_error(response)
 
     def _test_spam_calls(self, calls=200):

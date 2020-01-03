@@ -1,20 +1,23 @@
 import unittest
 from typing import Union
 from requests.exceptions import Timeout
-from ..src.zephyr import Zephyr
-from ..src.zephyr.resources import Project, Execution, Folder
+from jira import JIRAError
+from requests.exceptions import ConnectionError
+from zephyr import Zephyr
+from zephyr.resources import Project, Execution, Folder
+from .test_config import (INVALID_SERVER,
+                          VALID_SERVER,
+                          INVALID_AUTH,
+                          VALID_AUTH,
+                          )
 
-INVALID_SERVER = 'invalid'
-VALID_SERVER = 'valid'
-INVALID_AUTH = ('invalid', 'invalid')
-VALID_AUTH = ('valid', 'valid')
 VALID_PROJECT = 'valid'
 INVALID_PROJECT = 'invalid'
 POPULATED_ZQL = '' # TODO
 EMPTY_ZQL = ''  # TODO
 INVALID_ZQL = 'also wik' # TODO
 VALID_EXECUTION_ID = 0  # TODO
-EMPTY_FOLDER = Folder()
+# EMPTY_FOLDER = Folder()
 
 class ZephyrTestCase(unittest.TestCase):
     def setUp(self):
@@ -26,21 +29,24 @@ class TestClient(ZephyrTestCase):
         auth = VALID_AUTH
         verify = False
         timeout = 13
-        client = Zephyr()
+        client = Zephyr(server=server,
+                        basic_auth=auth,
+                        verify=verify,
+                        timeout=timeout)
         self.assertEqual(client.server, server)
-        self.assertEqual(client.auth, auth)
-        self.assertEqual(client.verify, verify)
+        self.assertEqual(client._session.auth, auth)
+        self.assertEqual(client._session.verify, verify)
         self.assertEqual(client.timeout, timeout)
         self.assertIsNone(client._projects)  # Verify projects cache is None, to be loaded upon access of 'projects'
 
     def test_init_invalid_server(self):
         server = INVALID_SERVER
-        with self.assertRaises(Timeout):
+        with self.assertRaises(ConnectionError):
             Zephyr(server=server)
 
     def test_init_invalid_auth(self):
         auth = INVALID_AUTH
-        with self.assertRaises(ValueError):
+        with self.assertRaises(JIRAError):
             Zephyr(basic_auth = auth)
     
     def test_projects_loading(self):
@@ -56,15 +62,15 @@ class TestClient(ZephyrTestCase):
         self.assertIsInstance(project, Project)
 
     def test_project_invalid(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(JIRAError):
             self.zephyr_client.project(INVALID_PROJECT)
 
     def test_executions_zql_valid(self):
         query_result = self.zephyr_client.executions_zql(POPULATED_ZQL)
-        self.assertIsInstance(query_result, Union[list, Execution])
+        self.assertIsInstance(query_result, (list, Execution))
         query_result = self.zephyr_client.executions_zql(EMPTY_ZQL)
         self.assertIsInstance(query_result, list)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(JIRAError):
             self.zephyr_client.executions_zql(INVALID_ZQL)
 
     def test_move_executions(self):

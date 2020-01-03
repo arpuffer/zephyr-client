@@ -23,6 +23,7 @@ EXECUTIONS_URL = ZAPI_URL + 'execution/?projectId={}&versionId={}&cycleId={}&fol
 EXECUTIONS_ZQL_URL = ZAPI_URL + 'zql/executeSearch?zqlQuery={}'
 MOVE_EXEUCTIONS_URL = ZAPI_URL + 'cycle/{}/move/executions/folder/{}'
 
+ERROR_DESC = 'errorDesc'
 
 class Zephyr():
     """Client session that leverages a requests.Session to interface with the Zephyr API
@@ -96,7 +97,11 @@ class Zephyr():
         return response.json()
 
     def get(self, url, params=None):
-        return self._session.get(url=url, params=params, timeout=self.timeout)
+        response = self._session.get(url=url, params=params, timeout=self.timeout)
+        jira.resilientsession.raise_on_error(response)
+        error = response.json().get(ERROR_DESC)
+        if error:
+            raise jira.JIRAError
 
     def put(self, url, data):
         return self._session.put(url=url, data=data, timeout=self.timeout)
@@ -109,7 +114,7 @@ class Zephyr():
                    'schedulesList': executions}
         response = self.put(url, data=payload)
         if response.status_code != 200:
-            raise NotImplementedError
+            raise jira.JIRAError(response=response)
 
     def _check_connection(self):
         """Verify connection to ZAPI server (called on init)
@@ -118,14 +123,9 @@ class Zephyr():
             ValueError: If server responds, but authentication failed
             ConnectionError: If no parseable response from server
         """
-        url = self.server + EMPTY_CYCLES_REQUEST
+        url = EMPTY_CYCLES_REQUEST.format(self.server)
         response = self.get(url)
-        if not response:
-            if response.status_code == 401:
-                raise ValueError("Authentication failed!")
-            if response.status_code == 400:  # check for bad request code
-                return
-            raise ConnectionError("Status code: %s" % response.status_code)
+        jira.resilientsession.raise_on_error(response)
 
     def _test_spam_calls(self, calls=200):
         failed_responses = []
@@ -140,3 +140,19 @@ class Zephyr():
                 failed_responses.append(response.content)
         if failed_responses:
             print("Failed calls: %s" % len(failed_responses))
+
+    def raise_on_error(self, response):
+        """If auth=None, the Zephyr API responds with a 200 status and the following content:
+            {
+             'errorDesc':'You do not have the permission to make this request. Login Required.',
+             'errorId': 'ERROR'
+            }
+        due to this, additional handling has been added to the jira client's raise_on_error method.
+        Invalid auth credentials will generate the expected 401 error
+
+        Arguments:
+            response {requests.Response}
+        """
+        if response.status_code == 200 and ERROR_DESC in response.content:
+            response.status_code = 401  # edit status code on the fly so jira lib method handles it
+        jira.resilientsession.raise_on_error(response)

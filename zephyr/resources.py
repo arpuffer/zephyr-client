@@ -1,11 +1,13 @@
+''' Zephyr Client Resource objects and accompanying methods '''
 import logging
 from requests import Session, HTTPError
-from config import SERVER
+from requests.packages import urllib3
+from .config import SERVER
 
 logger = logging.getLogger(__name__)
 
-JIRA_URL = SERVER + '/rest/api/2/'
-ZAPI_URL = SERVER + '/rest/zapi/latest/'
+JIRA_URL = '{}/rest/api/2/'
+ZAPI_URL = '{}/rest/zapi/latest/'
 
 PROJECT_URL = JIRA_URL + 'project'
 EXECUTION_URL = ZAPI_URL + 'execution'
@@ -15,6 +17,7 @@ GETCYCLES_URL = CYCLE_URL + '?projectId={}&versionId={}'
 FOLDERS_URL = ZAPI_URL + 'cycle/{}/folders?projectId={}&versionId={}&limit=&offset='
 STEPS_URL = ZAPI_URL + 'stepResult?executionId={}'
 
+urllib3.disable_warnings()
 
 class Resource():
     """Base class for Jira/Zephyr Resources"""
@@ -24,7 +27,7 @@ class Resource():
                  session=None):
         self.name = name
         self.id_ = id_
-        self._session: Session = session
+        self.zephyr_session = session
 
 class Project(Resource):
     """Jira Project Resource.  This is the top-level resource.
@@ -33,7 +36,7 @@ class Project(Resource):
     # TODO: Pull in from the jira lib(?)
     def __init__(self, name, id_, session):
         super().__init__(name, id_, session)
-        self.url = PROJECT_URL + '/{}'.format(id_)
+        self.url = PROJECT_URL.format(self.zephyr_session.server) + '/{}'.format(id_)
         self._versions = None
 
     @property
@@ -55,18 +58,19 @@ class Project(Resource):
         return version
 
     def _load_versions(self):
-        response = self._session.get(self.url, timeout=self._session.timeout)
+        response = self.zephyr_session.get(self.url)
         response = response.json()
         raw_versions = response['versions']
         versions = [Version(name=x['name'],
                             id_=x['id'],
                             project=self.id_,
-                            session=self._session) for x in raw_versions]
+                            session=self.zephyr_session) for x in raw_versions]
         self._versions = versions
 
 class Test(Resource):
     """ Zephyr Test Resource """
-    def __init__(self):
+    def __init__(self, name, id_, session, project):
+        super().__init__(name, id_, session)
         raise NotImplementedError
 
 class Version(Resource):
@@ -85,16 +89,20 @@ class Version(Resource):
             self._load_cycles()
         return self._cycles
 
+    def cycle(self, cycle_name):
+        match, = [x for x in self.cycles if x.name == cycle_name]
+        return match
+
     def _load_cycles(self):
         cycles = []
         url = GETCYCLES_URL.format(self.project, self.id_)
-        response = self._session.get(url, timeout=self._session.timeout)
+        response = self.zephyr_session.get(url)
         cycles_dict = response.json()  # dict in this casee
         cycles_dict.pop('recordsCount')
         for k, v in cycles_dict.items():
             cycle = Cycle(name=v['name'],
                           id_=k,
-                          session=self._session,
+                          session=self.zephyr_session,
                           version=self.id_,
                           project=self.project)
             cycles.append(cycle)
@@ -115,22 +123,26 @@ class Cycle(Resource):
             self._load_folders()
         return self._folders
 
+    def folder(self, folder_name):
+        matched_folder, = [x for x in self.folders if x.name == folder_name]
+        return matched_folder
+
     def _load_folders(self):
         url = self.url + 'folders?'
         params = {'projectId': self.project,
                   'versionId': self.version}
-        folders = self._session.get(url, params=params, timeout=self._session.timeout)
+        folders = self.zephyr_session.get(url, params=params)
         folders = folders.json()  # returns a list in this case -- not much consistency in Zephyr
         self._folders = [Folder(name=x['folderName'],
                                 id_=x['folderId'],
                                 project=self.project,
                                 version=self.version,
                                 cycle=self.id_,
-                                session=self._session) for x in folders]
+                                session=self.zephyr_session) for x in folders]
 
 class Folder(Resource):
     """ Zephyr Folder resource
-    Child of Cycle, NOT a resource entity.  Used only to query for executions.
+    Child of Cycle, NOT an actual resource entity.  Used only to query for executions.
     Execution querying requires a folder, and cannot be done from higher levels except via ZQL.
     All that exists for folder is a name and an ID integer
     """
@@ -149,11 +161,11 @@ class Folder(Resource):
 
     def _load_executions(self):
         url = GETEXECUTIONS_URL.format(self.project, self.version, self.id_, self.cycle)
-        executions = self._session.get(url, timeout=self._session.timeout)
+        executions = self.zephyr_session.get(url)
         executions = executions.json()  # list in this case
         executions = executions['executions']
         self._executions = [Execution(id_=x['id'],
-                                      session=self._session) for x in executions]
+                                      session=self.zephyr_session) for x in executions]
 
 class Execution(Resource):
     """ Zephyr Test Execution resource.  This resource is a distinct execution of a test
@@ -177,14 +189,29 @@ class Execution(Resource):
             self._load_steps()
         return self._steps
 
+    @property
+    def assignee(self):
+        return self.raw.get('assignee')
+
+    def comment(self):
+        return self.raw.get('comment')
+
+    @property
+    def folder_id(self):
+        return self.raw.get('folderId')
+
+    @property
+    def status(self):
+        return self.raw.get('executionStatus')
+
     def _load(self):
-        raw = self._session.get(self.url, timeout=self._session.timeout)
+        raw = self.zephyr_session.get(self.url)
         self._raw = raw.json()
 
     def _load_steps(self):
         # TODO: See links in slack from Aaron, latest changes in master
         url = STEPS_URL.format(self.id_)
-        steps = self._session.get(url, timeout=self._session.timeout)
+        steps = self.zephyr_session.get(url)
         steps = steps.json()  # list in this case
         self._steps = steps # maybe parse into an object later, maybe stop caring while I'm ahead
 
@@ -198,27 +225,10 @@ class Execution(Resource):
             HTTPError: on failure to assign
         """
         url = self.url + '?assignee={}'.format(user)
-        response = self._session.post(url, timeout=self._session.timeout)
+        response = self.zephyr_session.post(url)
         if response.status_code != 200:
             raise HTTPError('Assign failed, code: %s' % response.status_code)
         logger.debug('Assigned execution %s to %s', self.id_, user)
-
-    def move(self, folder: Resource):
-        """ REFERENCE FROM OLD IMPLEMENTATION
-        def move_executions(project, fixVersion, cycle, folder, executions):
-            url = "https://jira.MYSERVER.net/rest/zapi/latest/cycle/%s/move/executions/folder/%s"
-            url = url % (cycle.id_, folder.id_)
-            execution_ids = [x.id_ for x in executions]
-            payload = '{"projectId": %s, "versionId": %s, "schedulesList": %s}' % (project.id_,
-                                                                                   fixVersion.id_,
-                                                                                   execution_ids)
-            response = requests.request("PUT", url, data=payload, headers=headers, auth=(user, passwd))
-            if js_res.status_code != 200:
-                print(js_res)
-                raise Exception('### Error, bad server response %s ###' % js_res.status_code)
-            return executions
-        """
-        raise NotImplementedError
 
     def update(self, status=None, comment=None):
         raise NotImplementedError

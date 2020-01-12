@@ -1,7 +1,7 @@
 import unittest
 from .test_client import ZephyrTestCase
-from ..src import execution_status
-from ..src.zephyr.resources import (Resource,
+from zephyr import execution_status
+from zephyr.resources import (Resource,
                               Project,
                               Version,
                               Cycle,
@@ -23,11 +23,11 @@ INVALID_ASSIGNEE = 'sirNotAppearingInThisFilm'
 class TestResource(ZephyrTestCase):
     def test_init(self):
         name = 'foo'
-        id = 1
-        resource = Resource(name=name, id=id, session=self.zephyr_client)
+        id_ = 1
+        resource = Resource(name=name, id_=id_, session=self.zephyr_client)
         self.assertEqual(resource.name, name)
-        self.assertEqual(resource.id, id)
-        self.assertEqual(resource.session, self.zephyr_client)
+        self.assertEqual(resource.id_, id_)
+        self.assertEqual(resource.zephyr_session, self.zephyr_client)
 
 class TestProject(ZephyrTestCase):
     def setUp(self):
@@ -36,8 +36,8 @@ class TestProject(ZephyrTestCase):
 
     def test_init(self):
         name = 'foo'
-        id = 1
-        project = Project(name=name, id=id, session=self.zephyr_client)
+        id_ = 1
+        project = Project(name=name, id_=id_, session=self.zephyr_client)
         expected_url = self.zephyr_client.server + '/rest/api/2/project/1'
         self.assertEqual(project.url, expected_url)
         self.assertIsNone(project._versions)
@@ -135,15 +135,6 @@ class TestExecution(ZephyrTestCase):
         self.assertEqual(self.execution.assignee, assignee)
         with self.assertRaises(ValueError):
             self.execution.assign(invalid_assignee)
-
-    def test_move(self):
-        folder = VALID_FOLDER_NAME
-        self.assertNotEqual(self.execution.folder, folder)
-        self.execution.move(folder)
-        self.assertEqual(self.execution.folder, folder)
-        folder = INVALID_FOLDER_NAME
-        with self.assertRaises(ValueError):
-            self.execution.move(INVALID_FOLDER_NAME)
 
     def test_update(self):
         status = execution_status.WIP

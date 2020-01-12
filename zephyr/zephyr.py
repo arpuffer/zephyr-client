@@ -3,6 +3,7 @@
     Official API documentation is NOT reliable, but can be found here:
     https://getzephyr.docs.apiary.io
 '''
+import json
 from typing import List
 from requests import Session
 import jira
@@ -29,11 +30,14 @@ class Zephyr():
     """Client session that leverages a requests.Session to interface with the Zephyr API
     """
     def __init__(self,
-                 server=SERVER,
+                 server=None,
                  basic_auth=None,
                  verify: bool = VERIFY,
                  timeout: int = TIMEOUT):
-        self.server: str = server  #TODO: this isn't actually read.  SERVER from configs is used for all the URLs.  Fix it quick.
+        if server:
+            self.server = server  #TODO: this isn't actually read.  SERVER from configs is used for all the URLs.  Fix it quick.
+        else:
+            self.server = SERVER
         self.timeout = timeout
         self._session = Session()
         self._session.headers.update(_HEADERS)
@@ -67,7 +71,7 @@ class Zephyr():
         projects = jira_session.projects()
         projects = [Project(name=x.key,
                             id_=x.id,
-                            session=self._session) for x in projects]
+                            session=self) for x in projects]
         self._projects = projects
         jira_session.close()
 
@@ -80,7 +84,10 @@ class Zephyr():
         Returns:
             Project
         """
-        proj, = [x for x in self.projects if x.name == name]
+        try:
+            proj, = [x for x in self.projects if x.name == name]
+        except ValueError:
+            raise jira.JIRAError('Could not find project "%s"' % name)
         return proj
 
     def executions_zql(self, query: str):
@@ -94,7 +101,10 @@ class Zephyr():
         """
         url = EXECUTIONS_ZQL_URL.format(self.server, query)
         response = self.get(url=url)
-        return response.json()
+        response = response.json()
+        executions = response.get('executions')
+        executions = [Execution(x.get('id'), self) for x in executions]
+        return executions
 
     def get(self, url, params=None, raise_for_error=True):
         response = self._session.get(url=url, params=params, timeout=self.timeout)
@@ -105,16 +115,22 @@ class Zephyr():
                 raise jira.JIRAError(content_error)
         return response
 
-    def put(self, url, data):
-        return self._session.put(url=url, data=data, timeout=self.timeout)
+    def put(self, url, data, raise_for_error=True):
+        response = self._session.put(url=url, data=data, timeout=self.timeout)
+        if raise_for_error:
+            jira.resilientsession.raise_on_error(response)
+            content_error = response.json().get(ERROR_DESC)
+            if content_error:
+                raise jira.JIRAError(content_error)
+        return response
 
-    def move_executions(self, executions: List[Execution], folder: Folder):
-        url = MOVE_EXEUCTIONS_URL.format(folder.cycle, folder.id_)
-        executions = [x.id for x in executions]
-        payload = {'projectId': folder.project,
-                   'versionId': folder.version,
-                   'schedulesList': executions}
-        response = self.put(url, data=payload)
+    def move_executions(self, executions: List[Execution], destination_folder: Folder):
+        url = MOVE_EXEUCTIONS_URL.format(self.server, destination_folder.cycle, destination_folder.id_)
+        execution_ids = [x.id_ for x in executions]
+        payload = {'projectId': destination_folder.project,
+                   'versionId': destination_folder.version,
+                   'schedulesList': execution_ids}
+        response = self.put(url=url, data=json.dumps(payload))
         if response.status_code != 200:
             raise jira.JIRAError(response=response)
 

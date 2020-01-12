@@ -1,6 +1,7 @@
 ''' Zephyr Client Resource objects and accompanying methods '''
 import logging
 from requests import Session, HTTPError
+from requests.packages import urllib3
 from .config import SERVER
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ GETCYCLES_URL = CYCLE_URL + '?projectId={}&versionId={}'
 FOLDERS_URL = ZAPI_URL + 'cycle/{}/folders?projectId={}&versionId={}&limit=&offset='
 STEPS_URL = ZAPI_URL + 'stepResult?executionId={}'
 
+urllib3.disable_warnings()
 
 class Resource():
     """Base class for Jira/Zephyr Resources"""
@@ -25,7 +27,7 @@ class Resource():
                  session=None):
         self.name = name
         self.id_ = id_
-        self.zephyr_session: Session = session
+        self.zephyr_session = session
 
 class Project(Resource):
     """Jira Project Resource.  This is the top-level resource.
@@ -87,6 +89,10 @@ class Version(Resource):
             self._load_cycles()
         return self._cycles
 
+    def cycle(self, cycle_name):
+        match, = [x for x in self.cycles if x.name == cycle_name]
+        return match
+
     def _load_cycles(self):
         cycles = []
         url = GETCYCLES_URL.format(self.project, self.id_)
@@ -116,6 +122,10 @@ class Cycle(Resource):
         if self._folders is None:
             self._load_folders()
         return self._folders
+
+    def folder(self, folder_name):
+        matched_folder, = [x for x in self.folders if x.name == folder_name]
+        return matched_folder
 
     def _load_folders(self):
         url = self.url + 'folders?'
@@ -178,6 +188,21 @@ class Execution(Resource):
         if self._steps is None:
             self._load_steps()
         return self._steps
+
+    @property
+    def assignee(self):
+        return self.raw.get('assignee')
+
+    def comment(self):
+        return self.raw.get('comment')
+
+    @property
+    def folder_id(self):
+        return self.raw.get('folderId')
+
+    @property
+    def status(self):
+        return self.raw.get('executionStatus')
 
     def _load(self):
         raw = self.zephyr_session.get(self.url)

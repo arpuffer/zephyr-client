@@ -1,5 +1,5 @@
 UNEXECUTED = -1
-# TODO: PASS = 
+# TODO: PASS =
 # TODO: FAIL =
 WIP = 3  # TODO: not real value
-# TODO: PASS_WITH_EXCEPTION = 
+# TODO: PASS_WITH_EXCEPTION =

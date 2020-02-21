@@ -243,6 +243,7 @@ class Execution(Resource):
 
     def assign(self, user: str):
         """Assign execution to user
+        #TODO: this is broken, must use a PUT request with payload TODO: find and post payload
 
         Args:
             user (str): id, not name (john.smith, not John Smith)

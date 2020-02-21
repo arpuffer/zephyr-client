@@ -31,7 +31,6 @@ setup(
     packages=find_packages(),
     provides=[PKG],
     install_requires=requirements_file_to_list(),
-    test_suite='tests',
     classifiers=[
         'Topic :: Internet :: WWW/HTTP',
         'Intended Audience :: Developers',

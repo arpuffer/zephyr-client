@@ -1,3 +1,10 @@
 *config.py
 .mypy*
 __pycache__
+*.swp
+*.pyc
+\.eggs
+*venv*
+.venv/
+.venv*
+\.virtualenvs

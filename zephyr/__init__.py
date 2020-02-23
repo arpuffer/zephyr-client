@@ -8,9 +8,5 @@ from .zephyr import Zephyr
 
 __version__ = "0.0.1"
 
-
 LOGGER = logging.getLogger('zephyr')
-LOGGER.setLevel(logging.debug)
-
-def get_version():
-    return __version__
+LOGGER.setLevel(logging.DEBUG)

@@ -1,7 +1,6 @@
 """ Zephyr Client Resource objects and accompanying methods """
 import logging
-from requests import Session, HTTPError
-from requests.packages import urllib3
+
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +15,11 @@ GETCYCLES_URL = CYCLE_URL + "?projectId={}&versionId={}"
 FOLDERS_URL = ZAPI_URL + "cycle/{}/folders?projectId={}&versionId={}&limit=&offset="
 STEPS_URL = ZAPI_URL + "stepResult?executionId={}"
 
-urllib3.disable_warnings()
-
 
 class Resource:
     """Base class for Jira/Zephyr Resources"""
 
-    def __init__(self, name: str, id_: int, session=None):
+    def __init__(self, name: str, id_: int, session):
         self.name = name
         self.id_ = id_
         self.zephyr_session = session
@@ -197,7 +194,8 @@ class Execution(Resource):
 
     def __init__(self, id_, session):
         super().__init__(name=None, id_=id_, session=session)
-        self.url = EXECUTION_URL + "/{}".format(id_)
+        self.session = session
+        self.url = session.zapi_url + "execution/" + str(id_)
         self._raw = None
         self._steps = None
 
@@ -243,19 +241,30 @@ class Execution(Resource):
 
     def assign(self, user: str):
         """Assign execution to user
-        #TODO: this is broken, must use a PUT request with payload TODO: find and post payload
-
         Args:
             user (str): id, not name (john.smith, not John Smith)
 
         Raises:
             HTTPError: on failure to assign
         """
-        url = self.url + "?assignee={}".format(user)
-        response = self.zephyr_session.post(url)
-        if response.status_code != 200:
-            raise HTTPError("Assign failed, code: %s" % response.status_code)
+        payload = {
+            "assignee": user,
+            "assigneeType": "assignee",
+            "changeAssignee": True
+        }
+        response = self.execute(payload=payload)
         logger.debug("Assigned execution %s to %s", self.id_, user)
+        return response
+
+    def unassign(self):
+        payload = {
+            "changeAssignee": True
+        }
+        return self.execute(payload=payload)
+
+    def execute(self, payload):
+        url = self.url + "/execute"
+        return self.zephyr_session.put(url, data=payload)
 
     def update(self, status=None, comment=None):
         raise NotImplementedError

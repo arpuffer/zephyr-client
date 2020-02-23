@@ -6,21 +6,22 @@
 import json
 from typing import List
 from requests import Session
+from requests.packages import urllib3
 import jira
 from .resources import Project, Folder, Execution
-from .config import SERVER, USER, PASSWORD, VERIFY, TIMEOUT
 
 _HEADERS = {"Content-Type": "application/json"}
-ZAPI_URL = "{}/rest/zapi/latest/"
-EMPTY_CYCLES_REQUEST = ZAPI_URL + "cycle?expand="
+EMPTY_CYCLES_REQUEST = "cycle?expand="
 
 EXECUTIONS_URL = (
-    ZAPI_URL + "execution/?projectId={}&versionId={}&cycleId={}&folderId={}"
+    "execution/?projectId={}&versionId={}&cycleId={}&folderId={}"
 )
-EXECUTIONS_ZQL_URL = ZAPI_URL + "zql/executeSearch?zqlQuery={}"
-MOVE_EXEUCTIONS_URL = ZAPI_URL + "cycle/{}/move/executions/folder/{}"
+EXECUTIONS_ZQL_URL = "zql/executeSearch?zqlQuery={}"
+MOVE_EXEUCTIONS_URL = "cycle/{}/move/executions/folder/{}"
 
 ERROR_DESC = "errorDesc"
+
+urllib3.disable_warnings()
 
 
 class Zephyr:
@@ -29,22 +30,17 @@ class Zephyr:
 
     def __init__(
         self,
-        server=None,
+        server: str,
         basic_auth=None,
-        verify: bool = VERIFY,
-        timeout: int = TIMEOUT,
+        verify: bool = True,
+        timeout: int = 10,
     ):
-        if server:
-            self.server = server
-        else:
-            self.server = SERVER
+        self.server = server
         self.timeout = timeout
+        self.zapi_url = server + "/rest/zapi/latest/"
         self._session = Session()
         self._session.headers.update(_HEADERS)
-        if basic_auth:
-            self._session.auth = basic_auth
-        else:
-            self._session.auth = (USER, PASSWORD)
+        self._session.auth = basic_auth
         self._session.verify = verify
         self._projects = None  # assign None for uninitialized state
         self._check_connection()
@@ -62,7 +58,7 @@ class Zephyr:
 
     def _load_projects(self):
         """Loads a list of projects using the jira library.  ZAPI responses are not suitable, as they do not
-        contain key names.  See documentation for project loading here: 
+        contain key names.  See documentation for project loading here:
         https://getzephyr.docs.apiary.io/#reference/utilresource/get-all-projects/get-all-projects
         Response data example is NOT provided, but when calls were made to a real server, project name was not
         present.
@@ -74,6 +70,9 @@ class Zephyr:
         projects = [Project(name=x.key, id_=x.id, session=self) for x in projects]
         self._projects = projects
         jira_session.close()
+
+    def execution(self, id_):
+        return Execution(id_=id_, session=self)
 
     def project(self, name):
         """Find project by name (also known as key), not by integer id
@@ -99,7 +98,7 @@ class Zephyr:
         Returns:
             List[Execution]
         """
-        url = EXECUTIONS_ZQL_URL.format(self.server, query)
+        url = self.zapi_url + EXECUTIONS_ZQL_URL.format(query)
         response = self.get(url=url)
         response = response.json()
         executions = response.get("executions")
@@ -116,7 +115,19 @@ class Zephyr:
         return response
 
     def put(self, url, data, raise_for_error=True):
-        response = self._session.put(url=url, data=data, timeout=self.timeout)
+        """
+        Args:
+            url (str)
+            data ([type])
+            raise_for_error (bool, optional): Defaults to True.
+
+        Raises:
+            jira.JIRAError: [description]
+
+        Returns:
+            [dict]: response
+        """
+        response = self._session.put(url=url, data=json.dumps(data), timeout=self.timeout)
         if raise_for_error:
             jira.resilientsession.raise_on_error(response)
             content_error = response.json().get(ERROR_DESC)
@@ -125,8 +136,8 @@ class Zephyr:
         return response
 
     def move_executions(self, executions: List[Execution], destination_folder: Folder):
-        url = MOVE_EXEUCTIONS_URL.format(
-            self.server, destination_folder.cycle, destination_folder.id_
+        url = self.zapi_url + MOVE_EXEUCTIONS_URL.format(
+            destination_folder.cycle, destination_folder.id_
         )
         execution_ids = [x.id_ for x in executions]
         payload = {
@@ -145,7 +156,7 @@ class Zephyr:
             ValueError: If server responds, but authentication failed
             ConnectionError: If no parseable response from server
         """
-        url = EMPTY_CYCLES_REQUEST.format(self.server)
+        url = self.zapi_url + EMPTY_CYCLES_REQUEST
         response = self.get(url, raise_for_error=False)
         if (
             response.status_code == 400
@@ -159,8 +170,8 @@ class Zephyr:
         version_id = 20418
         cycle_id = 3447
         folder_id = 330
-        url = EXECUTIONS_URL.format(
-            self.server, project_id, version_id, cycle_id, folder_id
+        url = self.zapi_url + EXECUTIONS_URL.format(
+            project_id, version_id, cycle_id, folder_id
         )
         for _ in range(calls):
             response = self.get(url)

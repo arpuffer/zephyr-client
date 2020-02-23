@@ -1,9 +1,9 @@
-''' Very rough happy-path test '''
+""" Very rough happy-path test """
 
 from zephyr import Zephyr
 
 test = Zephyr()
-viiihw_project = test.project('VIIIHW')
+viiihw_project = test.project("VIIIHW")
 ver = viiihw_project.versions[-1]
 print("Version: %s" % str(ver.__dict__))
 cycles = ver.cycles

@@ -4,3 +4,7 @@ ZEPHYR for JIRA Client
     https://getzephyr.docs.apiary.io
 
 inspired by https://github.com/pycontribs/jira
+
+
+State of the project:
+Until I find a better way to mock the responses, there are no tests.  This is something I've only recently begun learning about, and my knowledge of pytest and unittest mocks is incomplete to say the least.

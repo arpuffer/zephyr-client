@@ -3,7 +3,8 @@
 from typing import List
 from setuptools import setup, find_packages
 PKG = 'zephyr'
-VERSION = __import__(PKG).get_version()
+VERSION = '0.0.1'
+
 
 def requirements_file_to_list(filename: str = "requirements.txt") -> List:
     """Create list of requirements from requirements.txt file
@@ -16,6 +17,7 @@ def requirements_file_to_list(filename: str = "requirements.txt") -> List:
     """
     with open(filename, 'r') as infile:
         return [x.rstrip() for x in list(infile) if x and not x.startswith('#')]
+
 
 with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()

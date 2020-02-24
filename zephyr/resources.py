@@ -194,8 +194,7 @@ class Execution(Resource):
 
     def __init__(self, id_, session):
         super().__init__(name=None, id_=id_, session=session)
-        self.session = session
-        self.url = session.zapi_url + "execution/" + str(id_)
+        self.url = self.zephyr_session.zapi_url + "execution/" + str(id_)
         self._raw = None
         self._steps = None
 
@@ -247,24 +246,39 @@ class Execution(Resource):
         Raises:
             HTTPError: on failure to assign
         """
-        payload = {
+        data = {
             "assignee": user,
             "assigneeType": "assignee",
             "changeAssignee": True
         }
-        response = self.execute(payload=payload)
+        response = self._execute(data=data)
         logger.debug("Assigned execution %s to %s", self.id_, user)
         return response
 
     def unassign(self):
-        payload = {
+        data = {
             "changeAssignee": True
         }
-        return self.execute(payload=payload)
+        return self._execute(data=data)
 
-    def execute(self, payload):
+    def _execute(self, data):
+        """Calls the Zephyr API "Execute" command, which updates an execution.
+        This method is private because it does more than execute a test--it
+        can also be used to edit other fields such as assignee.
+
+        Args:
+            payload (dict)
+
+        Returns:
+            dict
+        """
         url = self.url + "/execute"
-        return self.zephyr_session.put(url, data=payload)
+        return self.zephyr_session.put(url, data=data)
 
     def update(self, status=None, comment=None):
-        raise NotImplementedError
+        data = {}
+        if comment:
+            data["comment"] = comment
+        if status:
+            data["status"] = status
+        return self._execute(data=data)

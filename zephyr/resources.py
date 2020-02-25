@@ -54,7 +54,7 @@ class Project(Resource):
         Returns:
             Version
         """
-        (version,) = [x for x in self.versions if x.name == version_name]
+        (version,) = [x for x in self.versions if x.name.lower() == version_name.lower()]
         return version
 
     def _load_versions(self):
@@ -99,7 +99,7 @@ class Version(Resource):
         return self._cycles
 
     def cycle(self, cycle_name):
-        (match,) = [x for x in self.cycles if x.name == cycle_name]
+        (match,) = [x for x in self.cycles if x.name.lower() == cycle_name.lower()]
         return match
 
     def _load_cycles(self):
@@ -137,7 +137,7 @@ class Cycle(Resource):
         return self._folders
 
     def folder(self, folder_name):
-        (matched_folder,) = [x for x in self.folders if x.name == folder_name]
+        (matched_folder,) = [x for x in self.folders if x.name.lower() == folder_name.lower()]
         return matched_folder
 
     def _load_folders(self):

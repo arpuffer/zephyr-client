@@ -84,7 +84,7 @@ class Zephyr:
             Project
         """
         try:
-            (proj,) = [x for x in self.projects if x.name == name]
+            (proj,) = [x for x in self.projects if x.name == name.upper()]
         except ValueError:
             raise jira.JIRAError('Could not find project "%s"' % name)
         return proj

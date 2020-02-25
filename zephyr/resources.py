@@ -24,6 +24,9 @@ class Resource:
         self.id_ = id_
         self.zephyr_session = session
 
+    def __repr__(self):
+        return "<Zephyr Project: key=%s, id=%s>" % (self.name, self.id_)
+
 
 class Project(Resource):
     """Jira Project Resource.  This is the top-level resource.

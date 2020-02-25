@@ -215,7 +215,7 @@ class Execution(Resource):
 
     @property
     def assignee(self):
-        return self.raw.get("assignee")
+        return self.raw.get("assignedTo")
 
     def comment(self):
         return self.raw.get("comment")

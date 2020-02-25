@@ -109,7 +109,10 @@ class Zephyr:
         response = self._session.get(url=url, params=params, timeout=self.timeout)
         if raise_for_error:
             jira.resilientsession.raise_on_error(response)
-            content_error = response.json().get(ERROR_DESC)
+            try:
+                content_error = response.json().get(ERROR_DESC)
+            except AttributeError:
+                content_error = None
             if content_error:
                 raise jira.JIRAError(content_error)
         return response
@@ -130,7 +133,10 @@ class Zephyr:
         response = self._session.put(url=url, data=json.dumps(data), timeout=self.timeout)
         if raise_for_error:
             jira.resilientsession.raise_on_error(response)
-            content_error = response.json().get(ERROR_DESC)
+            try:
+                content_error = response.json().get(ERROR_DESC)
+            except AttributeError:
+                content_error = None
             if content_error:
                 raise jira.JIRAError(content_error)
         return response

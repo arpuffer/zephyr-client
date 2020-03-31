@@ -181,7 +181,7 @@ class Folder(Resource):
         return self._executions
 
     def _load_executions(self):
-        url = GETEXECUTIONS_URL.format(self.project, self.version, self.id_, self.cycle)
+        url = GETEXECUTIONS_URL.format(self.zephyr_session.server, self.project, self.version, self.id_, self.cycle)
         executions = self.zephyr_session.get(url)
         executions = executions.json()  # list in this case
         executions = executions["executions"]
